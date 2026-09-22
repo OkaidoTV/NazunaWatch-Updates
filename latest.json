@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "version": "1.11.0",
-  "buildNumber": 301,
-  "commit": "f083023365fbdce1b30f67f2b97f1c1498108b0e",
-  "sha256": "5de5b8282898ad889cb2ea91fc39a47ecd32e9f02025a5470db72527e7739dea",
-  "size": 64335726,
-  "publishedAt": "2026-09-22T18:41:22.5657312Z",
+  "buildNumber": 305,
+  "commit": "7f04f882f9f569229c07a88bf7a1895f1215024e",
+  "sha256": "5b46b881b5c8865c80adab75ea54e2034b71270b096c5aae6287963ec0bfed6f",
+  "size": 64347812,
+  "publishedAt": "2026-09-22T19:11:17.3821136Z",
   "installerUrl": "https://github.com/OkaidoTV/NazunaWatch-Updates/releases/download/nazuna-watch-latest/NazunaWatch_Setup_Latest.exe"
 }
