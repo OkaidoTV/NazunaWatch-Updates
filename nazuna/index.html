@@ -23,7 +23,7 @@ video{width:100%;background:#000;border-radius:12px;margin-top:12px;min-height:2
 <p class="small">Clique sur démarrer, puis choisis l’écran à partager.</p>
 <button id="hostBtn" class="primary">Démarrer Mytime</button>
 <div id="hostStatus" class="status warn">En attente.</div>
-<div id="codeBox" class="hidden"><div class="muted">Code de connexion</div><div id="sessionCode" class="code">------</div><div class="small muted">Garde cette page ouverte pendant la session.</div></div>
+<div id="codeBox" class="hidden"><div class="muted">Code de connexion</div><div id="sessionCode" class="code">------</div><div class="small muted">Le code reste valable environ 15 minutes. Garde cette page ouverte.</div></div>
 <video id="localVideo" autoplay muted playsinline></video>
 </section>
 <section class="card">
@@ -36,47 +36,132 @@ video{width:100%;background:#000;border-radius:12px;margin-top:12px;min-height:2
 <video id="remoteVideo" autoplay playsinline controls></video>
 </section>
 </div>
-<div class="card" style="margin-top:16px"><b>Important :</b> <span class="small muted">Cette version permet le partage d’écran et un canal de commandes dans Mytime. Une page web ne peut pas contrôler toute l’interface ChromeOS, la souris système ou les autres applications.</span></div>
+<div class="card" style="margin-top:16px"><b>Important :</b> <span class="small muted">Cette version utilise uniquement HTTPS pour mettre les deux navigateurs en relation, puis WebRTC pour l’écran. Elle ne peut pas contrôler toute l’interface ChromeOS ou contourner les restrictions de l’administrateur.</span></div>
 </main>
-<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-let hostPeer=null,viewerPeer=null,localStream=null,dataConn=null;
-const peerOptions={host:'0.peerjs.com',port:443,path:'/',secure:true,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}};
+const SUPABASE_URL='https://xpizdbnymmtiwtmgieoc.supabase.co';
+const SUPABASE_KEY='sb_publishable_e_ewK7Fqxbp9Z5puH_pSFQ_v2Zjsnky';
+const rtcConfig={iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun.cloudflare.com:3478'}
+]};
+let hostPc=null,viewerPc=null,localStream=null,dataChannel=null,hostCode=null,pollTimer=null;
 function setStatus(el,text,ok=false){el.textContent=text;el.className='status '+(ok?'ok':'warn')}
 function randomCode(){return String(Math.floor(100000+Math.random()*900000))}
-function wireHostConnection(conn){dataConn=conn;conn.on('open',()=>{setStatus($('hostStatus'),'Appareil connecté.',true);const call=hostPeer.call(conn.peer,localStream);call.on('error',e=>setStatus($('hostStatus'),'Erreur vidéo : '+e.message));});conn.on('data',data=>{if(data&&data.type==='ping'){setStatus($('hostStatus'),'Commande reçue depuis l’autre appareil ✓',true);conn.send({type:'pong',at:Date.now()});}});conn.on('close',()=>setStatus($('hostStatus'),'Connexion fermée.'));}
-async function startHost(){
- try{
-   localStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15,max:30}},audio:false});
-   $('localVideo').srcObject=localStream;
-   let attempts=0;
-   const create=()=>{
-     attempts++;
-     const code=randomCode();
-     const p=new Peer('mytime-'+code,peerOptions);
-     p.on('open',()=>{hostPeer=p;$('sessionCode').textContent=code;$('codeBox').classList.remove('hidden');setStatus($('hostStatus'),'Prêt. Entre ce code sur l’autre appareil.',true);p.on('connection',wireHostConnection);});
-     p.on('error',err=>{if(err.type==='unavailable-id'&&attempts<5){try{p.destroy()}catch{};create();}else setStatus($('hostStatus'),'Erreur de connexion : '+err.type);});
-   };
-   create();
- }catch(e){setStatus($('hostStatus'),'Partage refusé ou bloqué : '+e.message)}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function rpc(name,args){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`,{
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify(args)
+  });
+  if(!r.ok) throw new Error('HTTPS '+r.status);
+  return await r.json();
 }
-function connectViewer(){
- const code=$('codeInput').value.replace(/\D/g,'').slice(0,6);$('codeInput').value=code;
- if(code.length!==6){setStatus($('viewerStatus'),'Entre un code à 6 chiffres.');return}
- viewerPeer=new Peer(peerOptions);
- viewerPeer.on('open',()=>{
-   dataConn=viewerPeer.connect('mytime-'+code,{reliable:true});
-   dataConn.on('open',()=>{setStatus($('viewerStatus'),'Connecté. Attente de l’écran…',true);$('testBtn').disabled=false});
-   dataConn.on('data',data=>{if(data&&data.type==='pong')setStatus($('viewerStatus'),'Connexion OK ✓',true)});
-   dataConn.on('error',e=>setStatus($('viewerStatus'),'Erreur canal : '+e.message));
- });
- viewerPeer.on('call',call=>{call.answer(new MediaStream());call.on('stream',stream=>{$('remoteVideo').srcObject=stream;setStatus($('viewerStatus'),'Écran reçu.',true)});});
- viewerPeer.on('error',err=>setStatus($('viewerStatus'),'Connexion impossible : '+err.type));
+function waitIce(pc){
+  if(pc.iceGatheringState==='complete') return Promise.resolve();
+  return new Promise(resolve=>{
+    const f=()=>{if(pc.iceGatheringState==='complete'){pc.removeEventListener('icegatheringstatechange',f);resolve();}};
+    pc.addEventListener('icegatheringstatechange',f);
+    setTimeout(()=>{pc.removeEventListener('icegatheringstatechange',f);resolve();},8000);
+  });
+}
+function wirePcState(pc,statusEl){
+  pc.onconnectionstatechange=()=>{
+    const s=pc.connectionState;
+    if(s==='connected') setStatus(statusEl,'Connecté ✓',true);
+    else if(s==='failed') setStatus(statusEl,'Connexion WebRTC bloquée ou impossible.');
+    else if(s==='disconnected') setStatus(statusEl,'Connexion interrompue.');
+    else if(s==='connecting') setStatus(statusEl,'Connexion en cours…');
+  };
+}
+function bindHostDataChannel(ch){
+  dataChannel=ch;
+  ch.onopen=()=>setStatus($('hostStatus'),'Appareil connecté ✓',true);
+  ch.onmessage=e=>{
+    try{const d=JSON.parse(e.data);if(d.type==='ping'){setStatus($('hostStatus'),'Commande reçue depuis l’autre appareil ✓',true);ch.send(JSON.stringify({type:'pong',at:Date.now()}));}}catch{}
+  };
+  ch.onclose=()=>setStatus($('hostStatus'),'Canal fermé.');
+}
+function bindViewerDataChannel(ch){
+  dataChannel=ch;
+  ch.onopen=()=>{$('testBtn').disabled=false;setStatus($('viewerStatus'),'Connecté ✓',true)};
+  ch.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.type==='pong')setStatus($('viewerStatus'),'Connexion OK ✓',true)}catch{}};
+  ch.onclose=()=>setStatus($('viewerStatus'),'Canal fermé.');
+}
+async function startHost(){
+  $('hostBtn').disabled=true;
+  try{
+    setStatus($('hostStatus'),'Choisis l’écran à partager…');
+    localStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15,max:30}},audio:false});
+    $('localVideo').srcObject=localStream;
+    hostPc=new RTCPeerConnection(rtcConfig);
+    wirePcState(hostPc,$('hostStatus'));
+    localStream.getTracks().forEach(t=>hostPc.addTrack(t,localStream));
+    bindHostDataChannel(hostPc.createDataChannel('mytime',{ordered:true}));
+    const offer=await hostPc.createOffer();
+    await hostPc.setLocalDescription(offer);
+    await waitIce(hostPc);
+    const offerText=JSON.stringify(hostPc.localDescription);
+    let created=false;
+    for(let i=0;i<6&&!created;i++){
+      hostCode=randomCode();
+      created=await rpc('mytime_create_session',{p_code:hostCode,p_offer:offerText});
+    }
+    if(!created) throw new Error('impossible de créer un code');
+    $('sessionCode').textContent=hostCode;
+    $('codeBox').classList.remove('hidden');
+    setStatus($('hostStatus'),'Prêt. Entre ce code sur l’autre appareil.',true);
+    pollTimer=setInterval(async()=>{
+      try{
+        const answer=await rpc('mytime_get_answer',{p_code:hostCode});
+        if(answer&&hostPc&&!hostPc.currentRemoteDescription){
+          clearInterval(pollTimer);pollTimer=null;
+          await hostPc.setRemoteDescription(JSON.parse(answer));
+          setStatus($('hostStatus'),'Réponse reçue. Connexion en cours…');
+        }
+      }catch(e){setStatus($('hostStatus'),'Backend HTTPS inaccessible : '+e.message)}
+    },1200);
+    localStream.getVideoTracks()[0].onended=async()=>{
+      if(pollTimer)clearInterval(pollTimer);
+      try{await rpc('mytime_delete_session',{p_code:hostCode})}catch{}
+      setStatus($('hostStatus'),'Partage arrêté.');
+      $('hostBtn').disabled=false;
+    };
+  }catch(e){
+    setStatus($('hostStatus'),'Erreur : '+e.message);
+    $('hostBtn').disabled=false;
+  }
+}
+async function connectViewer(){
+  $('connectBtn').disabled=true;
+  const code=$('codeInput').value.replace(/\D/g,'').slice(0,6);$('codeInput').value=code;
+  if(code.length!==6){setStatus($('viewerStatus'),'Entre un code à 6 chiffres.');$('connectBtn').disabled=false;return}
+  try{
+    setStatus($('viewerStatus'),'Recherche de la session…');
+    const offer=await rpc('mytime_get_offer',{p_code:code});
+    if(!offer) throw new Error('code introuvable ou expiré');
+    viewerPc=new RTCPeerConnection(rtcConfig);
+    wirePcState(viewerPc,$('viewerStatus'));
+    viewerPc.ontrack=e=>{if(e.streams&&e.streams[0]){$('remoteVideo').srcObject=e.streams[0];setStatus($('viewerStatus'),'Écran reçu ✓',true)}};
+    viewerPc.ondatachannel=e=>bindViewerDataChannel(e.channel);
+    await viewerPc.setRemoteDescription(JSON.parse(offer));
+    const answer=await viewerPc.createAnswer();
+    await viewerPc.setLocalDescription(answer);
+    await waitIce(viewerPc);
+    const ok=await rpc('mytime_set_answer',{p_code:code,p_answer:JSON.stringify(viewerPc.localDescription)});
+    if(!ok) throw new Error('session expirée');
+    setStatus($('viewerStatus'),'Réponse envoyée. Connexion en cours…');
+    setTimeout(()=>{if(viewerPc&&viewerPc.connectionState!=='connected')setStatus($('viewerStatus'),'Toujours pas connecté : le réseau peut bloquer WebRTC.');},18000);
+  }catch(e){
+    setStatus($('viewerStatus'),'Connexion impossible : '+e.message);
+    $('connectBtn').disabled=false;
+  }
 }
 $('hostBtn').onclick=startHost;
 $('connectBtn').onclick=connectViewer;
-$('testBtn').onclick=()=>{if(dataConn&&dataConn.open){dataConn.send({type:'ping',at:Date.now()});setStatus($('viewerStatus'),'Test envoyé…')}};
+$('testBtn').onclick=()=>{if(dataChannel&&dataChannel.readyState==='open'){dataChannel.send(JSON.stringify({type:'ping',at:Date.now()}));setStatus($('viewerStatus'),'Test envoyé…')}};
 $('codeInput').addEventListener('input',e=>e.target.value=e.target.value.replace(/\D/g,'').slice(0,6));
 </script>
 </body>
