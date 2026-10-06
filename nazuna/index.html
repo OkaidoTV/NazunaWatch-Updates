@@ -1,167 +1,83 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mytime</title>
-  <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color-scheme: dark; }
-    body { margin:0; background:#101218; color:#f4f6fb; }
-    main { max-width:980px; margin:auto; padding:24px; }
-    h1 { margin:0 0 8px; font-size:28px; }
-    .muted { color:#aeb6c5; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px; }
-    .card { background:#191d26; border:1px solid #2b3240; border-radius:16px; padding:18px; }
-    button { border:0; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; margin:4px 4px 4px 0; }
-    button.primary { background:#fff; color:#111; }
-    button.secondary { background:#2b3240; color:#fff; }
-    textarea { width:100%; min-height:130px; box-sizing:border-box; margin-top:8px; padding:10px; border-radius:10px;
-      background:#0f1218; color:#dce3ef; border:1px solid #343c4b; resize:vertical; }
-    video { width:100%; background:#000; border-radius:12px; margin-top:12px; min-height:240px; }
-    .status { margin-top:10px; font-weight:700; }
-    .ok { color:#8be28b; }
-    .warn { color:#ffd36a; }
-    .small { font-size:13px; line-height:1.45; }
-    @media (max-width:760px){ .grid{grid-template-columns:1fr;} }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mytime</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color-scheme:dark}
+body{margin:0;background:#101218;color:#f4f6fb}main{max-width:980px;margin:auto;padding:24px}
+h1{margin:0 0 8px}.muted{color:#aeb6c5}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.card{background:#191d26;border:1px solid #2b3240;border-radius:16px;padding:18px}button{border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer;margin:4px 4px 4px 0}
+.primary{background:#fff;color:#111}.secondary{background:#2b3240;color:#fff}input{width:100%;box-sizing:border-box;background:#0f1218;color:#fff;border:1px solid #343c4b;border-radius:10px;padding:14px;font-size:20px;letter-spacing:4px;text-align:center}
+video{width:100%;background:#000;border-radius:12px;margin-top:12px;min-height:240px}.status{margin-top:10px;font-weight:700}.ok{color:#8be28b}.warn{color:#ffd36a}.code{font-size:42px;font-weight:800;letter-spacing:8px;margin:16px 0}.small{font-size:13px;line-height:1.45}.hidden{display:none}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <main>
-  <h1>Mytime</h1>
-  <div class="muted">Partage d’écran WebRTC, sans extension ni installation. Connexion manuelle pour le test.</div>
-
-  <div class="grid">
-    <section class="card">
-      <h2>1. Chromebook à partager</h2>
-      <p class="small">Ouvre cette page sur le Chromebook, puis clique sur <b>Partager mon écran</b>.</p>
-      <button id="shareBtn" class="primary">Partager mon écran</button>
-      <button id="makeOfferBtn" class="secondary" disabled>Créer le code d’offre</button>
-      <div id="hostStatus" class="status warn">En attente.</div>
-      <video id="localVideo" autoplay muted playsinline></video>
-
-      <label>Code d’offre à envoyer à l’autre appareil</label>
-      <textarea id="offerOut" readonly placeholder="Le code apparaîtra ici…"></textarea>
-      <button id="copyOffer" class="secondary">Copier l’offre</button>
-
-      <label>Colle ici la réponse reçue</label>
-      <textarea id="answerIn" placeholder="Colle la réponse ici…"></textarea>
-      <button id="applyAnswerBtn" class="secondary">Valider la réponse</button>
-    </section>
-
-    <section class="card">
-      <h2>2. Téléphone / autre PC</h2>
-      <p class="small">Ouvre la même page, colle le code d’offre du Chromebook, puis crée la réponse.</p>
-
-      <label>Code d’offre reçu</label>
-      <textarea id="offerIn" placeholder="Colle l’offre du Chromebook ici…"></textarea>
-      <button id="makeAnswerBtn" class="primary">Créer la réponse</button>
-
-      <label>Réponse à renvoyer au Chromebook</label>
-      <textarea id="answerOut" readonly placeholder="La réponse apparaîtra ici…"></textarea>
-      <button id="copyAnswer" class="secondary">Copier la réponse</button>
-
-      <div id="viewerStatus" class="status warn">Pas connecté.</div>
-      <video id="remoteVideo" autoplay playsinline controls></video>
-    </section>
-  </div>
-
-  <div class="card" style="margin-top:16px">
-    <b>Limite de cette V1 :</b>
-    <span class="small muted">elle permet de voir l’écran partagé. ChromeOS ne permet pas à une simple page web de prendre le contrôle global de la souris et du clavier.</span>
-  </div>
+<h1>Mytime</h1>
+<div class="muted">Connexion directe entre deux navigateurs avec un code à 6 chiffres.</div>
+<div class="grid">
+<section class="card">
+<h2>Sur le Chromebook</h2>
+<p class="small">Clique sur démarrer, puis choisis l’écran à partager.</p>
+<button id="hostBtn" class="primary">Démarrer Mytime</button>
+<div id="hostStatus" class="status warn">En attente.</div>
+<div id="codeBox" class="hidden"><div class="muted">Code de connexion</div><div id="sessionCode" class="code">------</div><div class="small muted">Garde cette page ouverte pendant la session.</div></div>
+<video id="localVideo" autoplay muted playsinline></video>
+</section>
+<section class="card">
+<h2>Depuis l’autre appareil</h2>
+<p class="small">Ouvre cette même page, saisis le code affiché sur le Chromebook puis connecte-toi.</p>
+<input id="codeInput" inputmode="numeric" maxlength="6" placeholder="000000" />
+<button id="connectBtn" class="primary">Se connecter</button>
+<button id="testBtn" class="secondary" disabled>Tester la connexion</button>
+<div id="viewerStatus" class="status warn">Pas connecté.</div>
+<video id="remoteVideo" autoplay playsinline controls></video>
+</section>
+</div>
+<div class="card" style="margin-top:16px"><b>Important :</b> <span class="small muted">Cette version permet le partage d’écran et un canal de commandes dans Mytime. Une page web ne peut pas contrôler toute l’interface ChromeOS, la souris système ou les autres applications.</span></div>
 </main>
-
+<script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script>
-const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-let hostPc = null;
-let viewerPc = null;
-let localStream = null;
-
-const $ = id => document.getElementById(id);
-const enc = obj => btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-const dec = str => JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
-
-function waitIce(pc) {
-  if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise(resolve => {
-    const f = () => {
-      if (pc.iceGatheringState === "complete") {
-        pc.removeEventListener("icegatheringstatechange", f);
-        resolve();
-      }
-    };
-    pc.addEventListener("icegatheringstatechange", f);
-  });
+const $=id=>document.getElementById(id);
+let hostPeer=null,viewerPeer=null,localStream=null,dataConn=null;
+const peerOptions={host:'0.peerjs.com',port:443,path:'/',secure:true,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}};
+function setStatus(el,text,ok=false){el.textContent=text;el.className='status '+(ok?'ok':'warn')}
+function randomCode(){return String(Math.floor(100000+Math.random()*900000))}
+function wireHostConnection(conn){dataConn=conn;conn.on('open',()=>{setStatus($('hostStatus'),'Appareil connecté.',true);const call=hostPeer.call(conn.peer,localStream);call.on('error',e=>setStatus($('hostStatus'),'Erreur vidéo : '+e.message));});conn.on('data',data=>{if(data&&data.type==='ping'){setStatus($('hostStatus'),'Commande reçue depuis l’autre appareil ✓',true);conn.send({type:'pong',at:Date.now()});}});conn.on('close',()=>setStatus($('hostStatus'),'Connexion fermée.'));}
+async function startHost(){
+ try{
+   localStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15,max:30}},audio:false});
+   $('localVideo').srcObject=localStream;
+   let attempts=0;
+   const create=()=>{
+     attempts++;
+     const code=randomCode();
+     const p=new Peer('mytime-'+code,peerOptions);
+     p.on('open',()=>{hostPeer=p;$('sessionCode').textContent=code;$('codeBox').classList.remove('hidden');setStatus($('hostStatus'),'Prêt. Entre ce code sur l’autre appareil.',true);p.on('connection',wireHostConnection);});
+     p.on('error',err=>{if(err.type==='unavailable-id'&&attempts<5){try{p.destroy()}catch{};create();}else setStatus($('hostStatus'),'Erreur de connexion : '+err.type);});
+   };
+   create();
+ }catch(e){setStatus($('hostStatus'),'Partage refusé ou bloqué : '+e.message)}
 }
-
-$("shareBtn").onclick = async () => {
-  try {
-    localStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 15, max: 30 } },
-      audio: false
-    });
-    $("localVideo").srcObject = localStream;
-    $("makeOfferBtn").disabled = false;
-    $("hostStatus").textContent = "Écran sélectionné. Crée maintenant l’offre.";
-    $("hostStatus").className = "status ok";
-  } catch (e) {
-    $("hostStatus").textContent = "Partage refusé ou bloqué : " + e.message;
-    $("hostStatus").className = "status warn";
-  }
-};
-
-$("makeOfferBtn").onclick = async () => {
-  try {
-    hostPc = new RTCPeerConnection(rtcConfig);
-    localStream.getTracks().forEach(t => hostPc.addTrack(t, localStream));
-    hostPc.onconnectionstatechange = () => {
-      $("hostStatus").textContent = "État : " + hostPc.connectionState;
-      $("hostStatus").className = "status " + (hostPc.connectionState === "connected" ? "ok" : "warn");
-    };
-    const offer = await hostPc.createOffer();
-    await hostPc.setLocalDescription(offer);
-    await waitIce(hostPc);
-    $("offerOut").value = enc(hostPc.localDescription);
-    $("hostStatus").textContent = "Offre prête. Envoie ce code à l’autre appareil.";
-  } catch (e) {
-    $("hostStatus").textContent = "Erreur offre : " + e.message;
-  }
-};
-
-$("makeAnswerBtn").onclick = async () => {
-  try {
-    viewerPc = new RTCPeerConnection(rtcConfig);
-    viewerPc.ontrack = ev => {
-      $("remoteVideo").srcObject = ev.streams[0];
-    };
-    viewerPc.onconnectionstatechange = () => {
-      $("viewerStatus").textContent = "État : " + viewerPc.connectionState;
-      $("viewerStatus").className = "status " + (viewerPc.connectionState === "connected" ? "ok" : "warn");
-    };
-    await viewerPc.setRemoteDescription(dec($("offerIn").value));
-    const answer = await viewerPc.createAnswer();
-    await viewerPc.setLocalDescription(answer);
-    await waitIce(viewerPc);
-    $("answerOut").value = enc(viewerPc.localDescription);
-    $("viewerStatus").textContent = "Réponse prête. Renvoie-la au Chromebook.";
-  } catch (e) {
-    $("viewerStatus").textContent = "Erreur réponse : " + e.message;
-  }
-};
-
-$("applyAnswerBtn").onclick = async () => {
-  try {
-    if (!hostPc) throw new Error("Crée d’abord une offre.");
-    await hostPc.setRemoteDescription(dec($("answerIn").value));
-    $("hostStatus").textContent = "Réponse appliquée. Connexion en cours…";
-  } catch (e) {
-    $("hostStatus").textContent = "Erreur : " + e.message;
-  }
-};
-
-$("copyOffer").onclick = () => navigator.clipboard.writeText($("offerOut").value);
-$("copyAnswer").onclick = () => navigator.clipboard.writeText($("answerOut").value);
+function connectViewer(){
+ const code=$('codeInput').value.replace(/\D/g,'').slice(0,6);$('codeInput').value=code;
+ if(code.length!==6){setStatus($('viewerStatus'),'Entre un code à 6 chiffres.');return}
+ viewerPeer=new Peer(peerOptions);
+ viewerPeer.on('open',()=>{
+   dataConn=viewerPeer.connect('mytime-'+code,{reliable:true});
+   dataConn.on('open',()=>{setStatus($('viewerStatus'),'Connecté. Attente de l’écran…',true);$('testBtn').disabled=false});
+   dataConn.on('data',data=>{if(data&&data.type==='pong')setStatus($('viewerStatus'),'Connexion OK ✓',true)});
+   dataConn.on('error',e=>setStatus($('viewerStatus'),'Erreur canal : '+e.message));
+ });
+ viewerPeer.on('call',call=>{call.answer(new MediaStream());call.on('stream',stream=>{$('remoteVideo').srcObject=stream;setStatus($('viewerStatus'),'Écran reçu.',true)});});
+ viewerPeer.on('error',err=>setStatus($('viewerStatus'),'Connexion impossible : '+err.type));
+}
+$('hostBtn').onclick=startHost;
+$('connectBtn').onclick=connectViewer;
+$('testBtn').onclick=()=>{if(dataConn&&dataConn.open){dataConn.send({type:'ping',at:Date.now()});setStatus($('viewerStatus'),'Test envoyé…')}};
+$('codeInput').addEventListener('input',e=>e.target.value=e.target.value.replace(/\D/g,'').slice(0,6));
 </script>
 </body>
 </html>
